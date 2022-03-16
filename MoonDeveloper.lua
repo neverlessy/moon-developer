@@ -20,8 +20,9 @@ local flags = imgui.WindowFlags
 enc.default = 'CP1251'
 local u8 = enc.UTF8
 local fonts = {}
-local menuType = {true, false, false, false, false, false, false, false}
+local menuType = {false, true, false, false, false, false, false, false}
 local moonDevMenu = new.bool()
+local dialogIdBool, dialogColorBool, dialogButtonIdBool, dialogListItemBool, dialogLogBool = new.bool(), new.bool(), new.bool(), new.bool(), new.bool()
 
 local moonDevMenuFrame = m.OnFrame(
     function() return moonDevMenu[0] end,
@@ -39,7 +40,7 @@ local moonDevMenuFrame = m.OnFrame(
                     switchMenu(3)
                 end
                 m.Button(u8"Транспорт", v2(200, 50), posX(10))
-                m.Button(u8"Пикапы", v2(200, 50), posX(10))
+                m.Button(u8"Текстдравы", v2(200, 50), posX(10))
                 m.Button(u8"Чат", v2(200, 50), posX(10))
                 m.Button(u8"Персонаж", v2(200, 50), posX(10))
                 m.Button(u8"Цель", v2(200, 50), posX(10))
@@ -55,8 +56,12 @@ local moonDevMenuFrame = m.OnFrame(
                 m.PopFont()
             end
             if menuType[2] then
-                m.PushFont(fonts[50])
-                    m.Text(u8"Тет а тет", posX(160), posY(150))
+                m.PushFont(fonts[25])
+                    m.Checkbox(u8" Номер диалога в заголовке", dialogIdBool, posY(9))
+                    m.Checkbox(u8" Показ цветовых кодов", dialogColorBool)
+                    m.Checkbox(u8" Номер кнопки в названии кнопки", dialogButtonIdBool)
+                    m.Checkbox(u8" Номер листайтема в списке", dialogListItemBool)
+                    m.Checkbox(u8" Сохранять информацию о диалоге в лог", dialogLogBool)
                 m.PopFont()
             end
             m.EndChild()
@@ -93,14 +98,85 @@ function main()
     if not isSampfuncsLoaded() or not isSampLoaded() then return end
     while not isSampAvailable() do wait(0) end
     sampMsg(scriptTag..'Скрипт успешно загружен', -1)
+    sampMsg(''..os.date("%X | %x", os.time(os.date("*t"))), -1)
     moonDevMenu[0] = not moonDevMenu[0]
     while true do wait(0)
         
     end
 end
 
+function scriptDialogLogCreate(id, style, title, button1, button2, text)
+
+end
+
+function events.onShowDialog(id, style, title, button1, button2, text)
+    if dialogLogBool[0] then
+        listitem = {}
+        separator = '\n'
+        for str in string.gmatch(text, "([^"..separator.."]+)") do
+                table.insert(listitem, str)
+        end
+        file = io.open(getWorkingDirectory().."/moonloader.log", "r+")
+        file:seek("end",0)
+        file:write("\n========================Moon Logging========================\n")
+        file:write("TIMESTAMP: "..os.date("%X | %x", os.time(os.date("*t")))..'')
+        file:write("\n============================================================\n")
+        file:write("Номер диалога: "..id..'\n')
+        file:write("Стиль: "..style..'\n')
+        if style == 2 or style == 4 or style == 5 then
+            file:write("Количество листайтемов: "..sampGetListboxItemsCount()..'\n')
+        end
+        file:write("Заголовок: "..title..'\n')
+        file:write("Кнопка 0: "..button1..'\n')
+        file:write("Кнопка 1: "..button2..'\n')
+        file:write("Текст: ")
+        for i = 1, #listitem do
+            file:write("\n\t"..listitem[i])
+        end
+        file:write("\n============================================================\n")
+        file:flush()
+        file:close()
+    end
+    if dialogListItemBool[0] and (style == 2 or style == 4 or style == 5) then
+        listitem = {}
+        separator = '\n'
+        for str in string.gmatch(text, "([^"..separator.."]+)") do
+                table.insert(listitem, str)
+        end
+        for i = 1, #listitem do
+            lastItem = listitem[i]
+            listitem[i] = '['..i..'] '..listitem[i]
+            text = text.gsub(text, lastItem, listitem[i])
+        end
+    end
+    if dialogColorBool[0] then
+        if text:find('%x+') then
+            colors = {}
+            for i = 1, 500 do
+                colors[i] = text:match("{(%x+)}")
+                if colors[i] ~= nil then
+                    text = text.gsub(text, '{'..colors[i]..'}', '~'..colors[i]..'~')
+                end
+            end
+            for v = 1, 500 do
+                if colors[v] ~= nil then
+                    text = text.gsub(text, '~'..colors[v]..'~', '{'..colors[v]..'}['..colors[v]..'] ')
+                end
+            end
+        end
+    end
+    if dialogIdBool[0] then
+        title = title..' {637282}['..id..']'
+    end
+    if dialogButtonIdBool[0] then
+        button1 = button1..' {637282}[0]'
+        button2 = button2..' {637282}[1]'
+    end
+    return {id, style, title, button1, button2, text}
+end
+
 function onScriptTerminate(script, quitGame)
-    sampMsg(scriptTag..'Умер', -1)
+    sampMsg(scriptTag..'Скрипт завершил работу с критической ошибкой', -1)
 end
 
 function imgui.DarkTheme()

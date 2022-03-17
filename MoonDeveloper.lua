@@ -1,12 +1,15 @@
----@diagnostic disable: undefined-global, lowercase-global
+---@diagnostic disable: undefined-global, lowercase-global, redundant-parameter
 
 local events = require 'samp.events'
 local imgui = require 'mimgui'
 local enc = require 'encoding'
+local wm = require 'windows.message'
+local vkeys = require 'vkeys'
 
 script_name('Moon Developer')
 script_authors('Moon Glance', 'neverlessy')
 script_version('1.0.0')
+script_description('All rights reserved. © Moon Glance 2022')
 
 local scriptTag = '{637282}[Moon Dev] {bababa}'
 local m = imgui
@@ -20,9 +23,11 @@ local flags = imgui.WindowFlags
 enc.default = 'CP1251'
 local u8 = enc.UTF8
 local fonts = {}
-local menuType = {false, true, false, false, false, false, false, false}
-local moonDevMenu = new.bool()
-local dialogIdBool, dialogColorBool, dialogButtonIdBool, dialogListItemBool, dialogLogBool = new.bool(), new.bool(), new.bool(), new.bool(), new.bool()
+local userScreenX, userScreenY = getScreenResolution()
+local fontCarInfo = renderCreateFont("Arial", 9, 5)
+local menuType = {false, false, false, true, false, false, false, false}
+local moonDevMenu, vehicleInfo = new.bool(), new.bool()
+local dialogIdBool, dialogColorBool, dialogButtonIdBool, dialogListItemBool, dialogLogBool, vehicleInfoNotCarBool, vehicleInfoCarBool, vehicleModSpeedSlider, vehicleRenderDistSlider = new.bool(), new.bool(), new.bool(), new.bool(), new.bool(), new.bool(), new.bool(true), new.float(3.6), new.int(50)
 
 local moonDevMenuFrame = m.OnFrame(
     function() return moonDevMenu[0] end,
@@ -39,7 +44,9 @@ local moonDevMenuFrame = m.OnFrame(
                 if m.Button(u8"Обьекты", v2(200, 50), posX(10)) then
                     switchMenu(3)
                 end
-                m.Button(u8"Транспорт", v2(200, 50), posX(10))
+                if m.Button(u8"Транспорт", v2(200, 50), posX(10)) then
+                    switchMenu(4)
+                end
                 m.Button(u8"Текстдравы", v2(200, 50), posX(10))
                 m.Button(u8"Чат", v2(200, 50), posX(10))
                 m.Button(u8"Персонаж", v2(200, 50), posX(10))
@@ -64,10 +71,52 @@ local moonDevMenuFrame = m.OnFrame(
                     m.Checkbox(u8" Сохранять информацию о диалоге в лог", dialogLogBool)
                 m.PopFont()
             end
+            if menuType[4] then
+                m.PushFont(fonts[25])
+                    m.Checkbox(u8" Информация об авто вне транспорта", vehicleInfoNotCarBool, posY(9))
+                    m.Checkbox(u8" Информация об авто в транспорте", vehicleInfoCarBool)
+                    if vehicleInfoCarBool[0] or vehicleInfoNotCarBool[0] then
+                        m.SliderFloat(u8' Множитель скорости', vehicleModSpeedSlider, 1.0, 10.0)
+                    end
+                    m.SliderInt(u8' Дальность рендера', vehicleRenderDistSlider, 1, 250)
+                m.PopFont()
+            end
             m.EndChild()
             --
         m.End()
-        m.HideCursor = false
+        player.HideCursor = false
+    end
+)
+
+
+local vehicleInfoFrame = m.OnFrame(
+    function() return vehicleInfo[0] end,
+    function(player)
+        m.SetNextWindowPos(v2(userScreenX - 300, userScreenY / 2), m.Cond.FirstUseEver, v2(0.5, 0.5))
+        m.SetNextWindowSize(v2(350, 200), m.Cond.FirstUseEver)
+        m.Begin("VehicleWindow", vehicleInfo, flags.NoResize + flags.NoCollapse + flags.NoScrollbar + flags.NoTitleBar)
+            if isCharInAnyCar(PLAYER_PED) and vehicleInfoCarBool[0] then
+                handle = storeCarCharIsInNoSave(PLAYER_PED)
+                doorStatus = getCarDoorLockStatus(handle)
+                if doorStatus then
+                    doorStatus = u8'Открыты'
+                else
+                    doorStatus = u8'Закрыты'
+                end
+                m.CenterText(u8"Информация об авто", posY(2)) m.Separator()
+                getNameOfVehicleModel()
+                m.CenterText(u8"Модель: "..getNameOfVehicleModel(getCarModel(handle)).." ["..getCarModel(handle).."]")
+                m.CenterText(u8"Цвет: "..select(1, getCarColours(handle))..'/'..select(2, getCarColours(handle)))
+                m.CenterText(u8"Здоровье: "..select(1, getCarHealth(handle)))
+                m.CenterText(u8"Двери: "..doorStatus)
+                m.CenterText(u8"Скорость: "..string.format('%.2f', select(1, getCarSpeed(handle) * vehicleModSpeedSlider[0])))
+                m.CenterText(u8"X: "..string.format('%.2f', select(1, getCarCoordinates(handle))).." | QX: "..string.format('%.2f', select(1, getVehicleQuaternion(handle))))
+                m.CenterText(u8"Y: "..string.format('%.2f', select(2, getCarCoordinates(handle))).." | QY: "..string.format('%.2f', select(2, getVehicleQuaternion(handle))))
+                m.CenterText(u8"Z: "..string.format('%.2f', select(3, getCarCoordinates(handle))).." | QZ: "..string.format('%.2f', select(3, getVehicleQuaternion(handle))))
+                m.CenterText(u8"QW: "..string.format('%.2f', select(4, getVehicleQuaternion(handle))))
+            end
+        m.End()
+        player.HideCursor = true
     end
 )
 
@@ -88,7 +137,7 @@ m.OnInitialize(function()
     m.GetIO().Fonts:AddFontFromFileTTF('trebucbd.ttf', 14.0, nil, glyph_ranges)
     fonts = {
         [15] = m.GetIO().Fonts:AddFontFromFileTTF(getWorkingDirectory()..'/resource/MoonDeveloper/fonts/SFDR.otf', 15.0, nil, glyph_ranges),
-        [25] = m.GetIO().Fonts:AddFontFromFileTTF(getWorkingDirectory()..'/resource/MoonDeveloper/fonts/SFDR.otf', 18.0, nil, glyph_ranges),
+        [25] = m.GetIO().Fonts:AddFontFromFileTTF(getWorkingDirectory()..'/resource/MoonDeveloper/fonts/FSm.otf', 18.0, nil, glyph_ranges),
         [50] = m.GetIO().Fonts:AddFontFromFileTTF(getWorkingDirectory()..'/resource/MoonDeveloper/fonts/SFDR.otf', 50.0, nil, glyph_ranges)
     }
     m.GetIO().IniFilename = nil
@@ -98,16 +147,45 @@ function main()
     if not isSampfuncsLoaded() or not isSampLoaded() then return end
     while not isSampAvailable() do wait(0) end
     sampMsg(scriptTag..'Скрипт успешно загружен', -1)
-    sampMsg(''..os.date("%X | %x", os.time(os.date("*t"))), -1)
-    moonDevMenu[0] = not moonDevMenu[0]
+    addEventHandler('onWindowMessage', function(msg, wparam, lparam)
+        if msg == wm.WM_KEYDOWN or msg == wm.WM_SYSKEYDOWN then
+            if wparam == vkeys.VK_F2 then
+                moonDevMenu[0] = not moonDevMenu[0]
+            end
+        end
+    end)
     while true do wait(0)
-        
+        if not isCharInAnyCar(PLAYER_PED) and vehicleInfoNotCarBool[0] then
+            vehicleInfo[0] = false
+            for _, handle in ipairs(getAllVehicles()) do
+                cPosX, cPosY, cPosZ = getCarCoordinates(handle)
+                X, Y = convert3DCoordsToScreen(cPosX, cPosY, cPosZ)
+                idcar = getCarModel(handle)
+                primaryColor, secondaryColor = getCarColours(handle)
+                health = getCarHealth(handle)
+                doorStatus = getCarDoorLockStatus(handle)
+                if doorStatus then
+                    doorStatus = 'Открыто'
+                else
+                    doorStatus = 'Закрыто'
+                end
+                speed = string.format('%.2f', getCarSpeed(handle) * vehicleModSpeedSlider[0])
+                --
+                if isCharInArea3d(PLAYER_PED, cPosX + vehicleRenderDistSlider[0], cPosY + vehicleRenderDistSlider[0], cPosZ + vehicleRenderDistSlider[0], cPosX - vehicleRenderDistSlider[0], cPosY - vehicleRenderDistSlider[0], cPosZ - vehicleRenderDistSlider[0], false) then
+                    text = "{FFFFFF}Модель: {637282}"..getNameOfVehicleModel(idcar)..' ['..idcar..']\n{FFFFFF}Цвет: {637282}'..primaryColor..'{FFFFFF} / {637282}'..secondaryColor..'\n{FFFFFF}Здоровье: {637282}'..health..'\n{FFFFFF}Позиция Х: {637282}'..string.format('%.2f', cPosX)..'\n{FFFFFF}Позиция Y: {637282}'..string.format('%.2f', cPosY)..'\n{FFFFFF}Позиция Z: {637282}'..string.format('%.2f', cPosZ)..'\n{FFFFFF}Состояние дверей: {637282}'..doorStatus..'\n{FFFFFF}Скорость: {637282}'..speed
+                    renderFontDrawText(fontCarInfo, text, X, Y, 0xFFAAAAAA)
+                end
+            end
+        elseif isCharInAnyCar(PLAYER_PED) and vehicleInfoCarBool[0] then
+            vehicleInfo[0] = true
+        elseif isCharInAnyCar(PLAYER_PED) and not vehicleInfoCarBool[0] then
+            vehicleInfo[0] = false
+        elseif not isCharInAnyCar(PLAYER_PED) then
+            vehicleInfo[0] = false
+        end
     end
 end
 
-function scriptDialogLogCreate(id, style, title, button1, button2, text)
-
-end
 
 function events.onShowDialog(id, style, title, button1, button2, text)
     if dialogLogBool[0] then
@@ -176,7 +254,14 @@ function events.onShowDialog(id, style, title, button1, button2, text)
 end
 
 function onScriptTerminate(script, quitGame)
-    sampMsg(scriptTag..'Скрипт завершил работу с критической ошибкой', -1)
+    sampMsg(scriptTag..'Скрипт завершил работу', -1)
+end
+
+function imgui.CenterText(text)
+    local width = imgui.GetWindowWidth()
+    local calc = imgui.CalcTextSize(text)
+    imgui.SetCursorPosX( width / 2 - calc.x / 2 )
+    imgui.Text(text)
 end
 
 function imgui.DarkTheme()
